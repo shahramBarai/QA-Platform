@@ -1,5 +1,7 @@
 # Q&A Platform
 
+_\*This project is part of Aalto University's Designing and Building Scalable Web Applications course (completed in spring 2024)._
+
 This project is a Question and Answer web application designed for coursework discussions. It allows users to:
 
 - **View** courses and **post questions** related to those courses
