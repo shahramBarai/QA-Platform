@@ -1,0 +1,98 @@
+version: "3.4"
+
+services:
+  database:
+    container_name: database-server-dab-p2-227e211d-cbb0-49d2-a31c-bb8cca6b8282
+    image: postgres:14.1
+    restart: unless-stopped
+    volumes:
+      - ./production-database-data:/var/lib/postgresql/data
+    env_file:
+      - project.env
+
+  flyway:
+    image: flyway/flyway:9.11.0-alpine
+    depends_on:
+      - database
+    volumes:
+      - ./flyway/sql/:/flyway/sql
+    command: -connectRetries=60 -baselineOnMigrate=true migrate
+    env_file:
+      - project.env
+    profiles:
+      - migrate
+  
+  redis:
+    image: redis:latest
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+    expose:
+      - 6379
+
+  llm-api:
+    build: llm-api
+    image: llm-api
+    restart: "on-failure"
+    expose:
+      - 7000
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: "5s"
+        max_attempts: 3
+        window: "30s"
+
+  qa-api:
+    build:
+      context: qa-api
+      dockerfile: Dockerfile.prod
+    image: qa-api-prod
+    restart: "on-failure"
+    volumes:
+      - ./qa-api/:/app
+      - ./app-cache/:/app-cache
+    expose:
+      - 7777
+    depends_on:
+      - database
+      - redis
+      - llm-api
+    env_file:
+      - project.env
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: "5s"
+        max_attempts: 3
+        window: "30s"
+
+  qa-ui:
+    build: 
+      context: qa-ui
+      dockerfile: Dockerfile.prod
+    image: qa-ui-prod
+    restart: "on-failure"
+    expose:
+      - 3000
+    depends_on:
+      - qa-api
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: "5s"
+        max_attempts: 3
+        window: "30s"
+
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - qa-api
+      - qa-ui
+    ports:
+      - 7800:7800
